@@ -1,0 +1,20 @@
+{
+  "app": "npx ts-node bin/app.ts",
+  "context": {
+    "serviceName": "my-service",
+    "env": "dev",
+    "region": "us-east-1",
+    "containerPort": 8000,
+    "containerCpu": 512,
+    "containerMemoryMb": 1024,
+    "desiredCount": 2,
+    "minCapacity": 1,
+    "maxCapacity": 10,
+    "dbName": "mydb",
+    "dbInstanceClass": "t4g.small",
+    "dbAllocatedStorageGb": 20,
+    "dbMaxAllocatedStorageGb": 100,
+    "ecrImageTag": "latest",
+    "healthCheckPath": "/api/v1/health"
+  }
+}

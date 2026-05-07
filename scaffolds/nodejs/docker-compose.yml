@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      target: build        # uses the build stage so tsx hot-reload works
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      LOG_LEVEL: debug
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src      # mount src for hot-reload via tsx watch
+    command: npm run dev
+    depends_on: []
+      # - db
+      # - cache
+    restart: unless-stopped
+
+  # ─── Uncomment as needed ──────────────────────────────────────────────────
+
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: mydb
+  #   ports:
+  #     - '5432:5432'
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+
+  # cache:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - '6379:6379'
+
+# volumes:
+#   pgdata:
