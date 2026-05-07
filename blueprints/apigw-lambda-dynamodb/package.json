@@ -1,0 +1,23 @@
+{
+  "name": "blueprint-apigw-lambda-dynamodb",
+  "version": "1.0.0",
+  "description": "IDP Blueprint: API Gateway + Lambda + DynamoDB",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy",
+    "diff": "cdk diff",
+    "lint": "eslint lib bin --ext .ts"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.140.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "aws-cdk": "^2.140.0",
+    "typescript": "^5.4.5"
+  }
+}

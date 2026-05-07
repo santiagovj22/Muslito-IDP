@@ -1,0 +1,17 @@
+{
+  "app": "npx ts-node bin/app.ts",
+  "context": {
+    "serviceName": "my-service",
+    "env": "dev",
+    "region": "us-east-1",
+    "tableName": "my-table",
+    "tablePartitionKey": "pk",
+    "tableSortKey": "sk",
+    "lambdaRuntime": "nodejs20.x",
+    "lambdaMemoryMb": 512,
+    "lambdaTimeoutSeconds": 30,
+    "apiStageName": "v1",
+    "alarmErrorThreshold": 5,
+    "alarmEvaluationPeriods": 1
+  }
+}

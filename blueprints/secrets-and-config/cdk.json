@@ -1,0 +1,18 @@
+{
+  "app": "npx ts-node bin/app.ts",
+  "context": {
+    "serviceName": "my-service",
+    "env": "dev",
+    "region": "us-east-1",
+    "secrets": [
+      { "name": "api-key", "description": "Third-party API key" },
+      { "name": "jwt-secret", "description": "JWT signing secret" }
+    ],
+    "parameters": [
+      { "name": "feature-flags", "value": "{}", "description": "Feature flag JSON config" },
+      { "name": "app-config", "value": "{}", "description": "Application config" }
+    ],
+    "enableRotation": false,
+    "rotationDays": 30
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "app": "npx ts-node bin/app.ts",
+  "context": {
+    "serviceName": "my-service",
+    "env": "dev",
+    "region": "us-east-1",
+    "redisNodeType": "cache.t4g.micro",
+    "redisEngineVersion": "7.1",
+    "multiAz": false,
+    "numCacheClusters": 1,
+    "appSecurityGroupId": "",
+    "vpcId": ""
+  }
+}

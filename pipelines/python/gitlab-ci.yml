@@ -1,0 +1,165 @@
+# ─── IDP GitLab CI Pipeline — Python / FastAPI ───────────────────────────────
+# Copy this file to your service root as .gitlab-ci.yml
+# Required CI/CD variables (set in GitLab → Settings → CI/CD → Variables):
+#   AWS_DEPLOY_ROLE_ARN, ECR_REGISTRY, AWS_REGION, SERVICE_NAME
+#   ECS_CLUSTER, ECS_SERVICE
+
+image: python:3.12-slim
+
+stages:
+  - lint
+  - test
+  - security
+  - build
+  - deploy
+
+variables:
+  APP_ENV: test
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  POETRY_VERSION: "1.8.2"
+  POETRY_VIRTUALENVS_IN_PROJECT: "true"
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: "1"
+
+# ─── Cache ────────────────────────────────────────────────────────────────────
+.python_cache: &python_cache
+  cache:
+    key:
+      files:
+        - poetry.lock
+    paths:
+      - .pip-cache/
+      - .venv/
+    policy: pull-push
+
+# ─── Install ──────────────────────────────────────────────────────────────────
+.install: &install
+  before_script:
+    - pip install poetry==$POETRY_VERSION --quiet
+    - poetry install --no-interaction
+
+# ─── Lint & Type Check ────────────────────────────────────────────────────────
+lint:
+  stage: lint
+  <<: *python_cache
+  <<: *install
+  script:
+    - poetry run ruff check .
+    - poetry run ruff format --check .
+    - poetry run mypy app/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+# ─── Unit Tests ───────────────────────────────────────────────────────────────
+unit-tests:
+  stage: test
+  <<: *python_cache
+  <<: *install
+  script:
+    - poetry run pytest tests/unit/ --cov=app --cov-report=xml --cov-report=term-missing
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 7 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+# ─── Integration Tests ────────────────────────────────────────────────────────
+integration-tests:
+  stage: test
+  <<: *python_cache
+  <<: *install
+  services:
+    # Uncomment as needed:
+    # - name: postgres:16-alpine
+    #   alias: db
+    # - name: redis:7-alpine
+    #   alias: cache
+  variables:
+    APP_ENV: test
+    # DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/testdb
+  script:
+    - poetry run pytest tests/integration/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ─── Security Scan ────────────────────────────────────────────────────────────
+security:
+  stage: security
+  <<: *python_cache
+  <<: *install
+  script:
+    - poetry run bandit -r app/ -ll
+    - poetry run safety check
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# ─── Build & Push Docker Image ────────────────────────────────────────────────
+build-image:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  variables:
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+    IMAGE_NAME: $ECR_REGISTRY/$SERVICE_NAME
+  before_script:
+    - apk add --no-cache aws-cli
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+  script:
+    - docker build --target production -t $IMAGE_NAME:$IMAGE_TAG -t $IMAGE_NAME:latest .
+    - docker push $IMAGE_NAME:$IMAGE_TAG
+    - docker push $IMAGE_NAME:latest
+    - echo "IMAGE_TAG=$IMAGE_TAG" >> build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+  needs:
+    - job: lint
+    - job: unit-tests
+    - job: integration-tests
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+# ─── Deploy to Staging ────────────────────────────────────────────────────────
+deploy-staging:
+  stage: deploy
+  image: alpine:latest
+  environment:
+    name: staging
+  before_script:
+    - apk add --no-cache aws-cli
+  script:
+    - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment --region $AWS_REGION
+    - aws ecs wait services-stable --cluster $ECS_CLUSTER --services $ECS_SERVICE --region $AWS_REGION
+  needs: [{ job: build-image, artifacts: true }]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+# ─── Deploy to Production ─────────────────────────────────────────────────────
+deploy-production:
+  stage: deploy
+  image: alpine:latest
+  environment:
+    name: production
+  before_script:
+    - apk add --no-cache aws-cli
+  script:
+    - aws ecs update-service --cluster $ECS_CLUSTER --service ${ECS_SERVICE}-prod --force-new-deployment --region $AWS_REGION
+    - aws ecs wait services-stable --cluster $ECS_CLUSTER --services ${ECS_SERVICE}-prod --region $AWS_REGION
+  needs: [{ job: build-image, artifacts: true }]
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'

@@ -1,0 +1,63 @@
+name: CD — Node.js
+
+on:
+  workflow_run:
+    workflows: ['CI — Node.js']
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: tag
+        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # ─── ECS Fargate deployment ──────────────────────────────────────────────
+      - name: Update ECS service
+        run: |
+          IMAGE="${{ vars.ECR_REGISTRY }}/${{ vars.SERVICE_NAME }}:${{ steps.tag.outputs.tag }}"
+          aws ecs update-service \
+            --cluster ${{ vars.ECS_CLUSTER }} \
+            --service ${{ vars.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ vars.AWS_REGION }}
+
+      - name: Wait for deployment
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ vars.ECS_CLUSTER }} \
+            --services ${{ vars.ECS_SERVICE }} \
+            --region ${{ vars.AWS_REGION }}
+
+      # ─── Lambda deployment (uncomment if using Lambda) ───────────────────────
+      # - name: Deploy Lambda
+      #   run: |
+      #     IMAGE="${{ vars.ECR_REGISTRY }}/${{ vars.SERVICE_NAME }}:${{ steps.tag.outputs.tag }}"
+      #     aws lambda update-function-code \
+      #       --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+      #       --image-uri $IMAGE \
+      #       --region ${{ vars.AWS_REGION }}
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "Deployment ${{ job.status }} for ${{ vars.SERVICE_NAME }} @ ${{ steps.tag.outputs.tag }}"
+          # Add Slack/Teams notification here
