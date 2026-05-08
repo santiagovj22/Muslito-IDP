@@ -2,6 +2,7 @@
 
 export interface Scaffold {
   id: string;
+  version: string;
   name: string;
   language: string;
   framework: string;
@@ -30,6 +31,7 @@ export interface Blueprint {
 export const scaffolds: Scaffold[] = [
   {
     id: 'nodejs',
+    version: '1.0.0',
     name: 'Node.js / Fastify',
     language: 'TypeScript',
     framework: 'Fastify 4',
@@ -80,6 +82,7 @@ export const scaffolds: Scaffold[] = [
   },
   {
     id: 'fastapi',
+    version: '1.0.0',
     name: 'Python / FastAPI',
     language: 'Python',
     framework: 'FastAPI',

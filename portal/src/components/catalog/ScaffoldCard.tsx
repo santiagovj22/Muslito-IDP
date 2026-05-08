@@ -17,7 +17,12 @@ export const ScaffoldCard = ({ scaffold }: ScaffoldCardProps) => (
         <Code2 className="h-5 w-5 text-brand-600" />
       </div>
       <div>
-        <h3 className="font-semibold text-gray-900 group-hover:text-brand-700">{scaffold.name}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900 group-hover:text-brand-700">{scaffold.name}</h3>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-500">
+            v{scaffold.version}
+          </span>
+        </div>
         <p className="text-xs text-gray-400">{scaffold.language} · {scaffold.framework}</p>
       </div>
     </div>
