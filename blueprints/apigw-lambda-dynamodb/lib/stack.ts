@@ -11,7 +11,7 @@ import { Construct } from 'constructs';
 export class ApiGwLambdaDynamoStack extends cdk.Stack {
   public readonly api: apigatewayv2.HttpApi;
   public readonly fn: lambda.Function;
-  public readonly table: dynamodb.Table;
+  public readonly table: dynamodb.TableV2;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -28,14 +28,14 @@ export class ApiGwLambdaDynamoStack extends cdk.Stack {
     const alarmErrorThreshold = Number(this.node.tryGetContext('alarmErrorThreshold') ?? 5);
 
     // ─── DynamoDB Table ──────────────────────────────────────────────────────
-    this.table = new dynamodb.Table(this, 'Table', {
+    this.table = new dynamodb.TableV2(this, 'Table', {
       tableName: `${serviceName}-${env}-${tableName}`,
       partitionKey: { name: partitionKey, type: dynamodb.AttributeType.STRING },
       ...(sortKey && {
         sortKey: { name: sortKey, type: dynamodb.AttributeType.STRING },
       }),
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      billing: dynamodb.Billing.onDemand(),
+      encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
       pointInTimeRecovery: env === 'production',
       removalPolicy: env === 'production'
         ? cdk.RemovalPolicy.RETAIN
