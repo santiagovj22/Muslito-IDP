@@ -1,0 +1,4 @@
+# Dependencies & build output
+node_modules/
+build/
+.docusaurus/
