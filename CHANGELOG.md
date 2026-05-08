@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0](https://github.com/santiagovj22/Muslito-IDP/compare/v1.0.0...v1.1.0) (2026-05-08)
+
+### 🚀 Features
+
+* **docs:** Update readme.md with latest features and proper documentation ([1fd880b](https://github.com/santiagovj22/Muslito-IDP/commit/1fd880ba066a294cc6494f5ccf84809c8618b477))
+
 ## 1.0.0 (2026-05-08)
 
 ### 🚀 Features
