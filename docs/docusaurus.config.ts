@@ -7,7 +7,7 @@ const config: Config = {
   tagline: 'Golden paths and paved roads for your engineering team',
   favicon: 'img/favicon.ico',
 
-  url: 'https://your-org.github.io',
+  url: 'https://santiagovj22.github.io',
   baseUrl: '/Muslito-IDP/',
 
   organizationName: 'santiagovj22',
