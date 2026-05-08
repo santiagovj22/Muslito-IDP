@@ -47,7 +47,12 @@ export default function ScaffoldDetailPage({ params }: Props) {
                 <Badge key={tag} label={tag} variant="default" />
               ))}
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">{scaffold.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-900">{scaffold.name}</h1>
+              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-sm font-mono text-gray-500">
+                v{scaffold.version}
+              </span>
+            </div>
             <p className="mt-2 max-w-2xl text-gray-500 leading-relaxed">{scaffold.description}</p>
           </div>
 

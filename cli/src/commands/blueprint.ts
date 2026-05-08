@@ -1,13 +1,37 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
+import path from 'path';
+import fs from 'fs-extra';
+import ora from 'ora';
+import { runInherited, runPiped, commandExists } from '../lib/exec';
+import { confirm } from '../lib/prompt';
 
-// ─── Blueprint catalog ───────────────────────────────────────────────────────
-const BLUEPRINTS: Record<string, {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface DeployContext {
+  name: string;
+  env: string;
+  region: string;
+}
+
+interface BlueprintMeta {
   name: string;
   description: string;
   resources: string[];
-  deployCommand: (ctx: Record<string, string>) => string;
-}> = {
+  /** Returns the full shell command string shown in the print path. */
+  deployCommand: (ctx: DeployContext) => string;
+  /** Returns structured CDK context flags used in the --run path. */
+  cdkFlags: (ctx: DeployContext) => string[];
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const getBlueprintsRoot = (): string =>
+  path.resolve(__dirname, '../../../blueprints');
+
+// ─── Blueprint catalog ───────────────────────────────────────────────────────
+
+const BLUEPRINTS: Record<string, BlueprintMeta> = {
   'apigw-lambda-dynamodb': {
     name: 'API Gateway + Lambda + DynamoDB',
     description: 'Serverless REST API with NoSQL storage.',
@@ -22,6 +46,12 @@ const BLUEPRINTS: Record<string, {
     deployCommand: (ctx) =>
       `cd blueprints/apigw-lambda-dynamodb && npm install && cdk deploy ` +
       `-c serviceName=${ctx.name} -c env=${ctx.env} -c region=${ctx.region}`,
+    cdkFlags: (ctx) => [
+      'deploy',
+      '-c', `serviceName=${ctx.name}`,
+      '-c', `env=${ctx.env}`,
+      '-c', `region=${ctx.region}`,
+    ],
   },
   'ecs-fargate-rds': {
     name: 'ECS Fargate + ALB + RDS PostgreSQL',
@@ -39,6 +69,12 @@ const BLUEPRINTS: Record<string, {
     deployCommand: (ctx) =>
       `cd blueprints/ecs-fargate-rds && npm install && cdk deploy ` +
       `-c serviceName=${ctx.name} -c env=${ctx.env} -c region=${ctx.region}`,
+    cdkFlags: (ctx) => [
+      'deploy',
+      '-c', `serviceName=${ctx.name}`,
+      '-c', `env=${ctx.env}`,
+      '-c', `region=${ctx.region}`,
+    ],
   },
   'cache-layer': {
     name: 'ElastiCache Redis (add-on)',
@@ -51,6 +87,11 @@ const BLUEPRINTS: Record<string, {
     ],
     deployCommand: (ctx) =>
       `cd blueprints/cache-layer && npm install && cdk deploy -c serviceName=${ctx.name} -c env=${ctx.env}`,
+    cdkFlags: (ctx) => [
+      'deploy',
+      '-c', `serviceName=${ctx.name}`,
+      '-c', `env=${ctx.env}`,
+    ],
   },
   'event-driven': {
     name: 'EventBridge + SQS + Lambda (add-on)',
@@ -63,6 +104,11 @@ const BLUEPRINTS: Record<string, {
     ],
     deployCommand: (ctx) =>
       `cd blueprints/event-driven && npm install && cdk deploy -c serviceName=${ctx.name} -c env=${ctx.env}`,
+    cdkFlags: (ctx) => [
+      'deploy',
+      '-c', `serviceName=${ctx.name}`,
+      '-c', `env=${ctx.env}`,
+    ],
   },
   'secrets-and-config': {
     name: 'Secrets Manager + SSM Parameter Store',
@@ -74,10 +120,16 @@ const BLUEPRINTS: Record<string, {
     ],
     deployCommand: (ctx) =>
       `cd blueprints/secrets-and-config && npm install && cdk deploy -c serviceName=${ctx.name} -c env=${ctx.env}`,
+    cdkFlags: (ctx) => [
+      'deploy',
+      '-c', `serviceName=${ctx.name}`,
+      '-c', `env=${ctx.env}`,
+    ],
   },
 };
 
-// ─── Commands ────────────────────────────────────────────────────────────────
+// ─── Commands ─────────────────────────────────────────────────────────────────
+
 export const blueprintCommand = (): Command => {
   const blueprint = new Command('blueprint').description('Manage infrastructure blueprints');
 
@@ -115,26 +167,89 @@ export const blueprintCommand = (): Command => {
   // idp blueprint deploy <name>
   blueprint
     .command('deploy <name>')
-    .description('Show the CDK deploy command for a blueprint')
+    .description('Print or execute the CDK deploy command for a blueprint')
     .requiredOption('-n, --name <name>', 'Service name')
     .option('-e, --env <env>', 'Environment (dev|staging|production)', 'dev')
     .option('-r, --region <region>', 'AWS region', 'us-east-1')
-    .action((name: string, opts) => {
+    .option('--run', 'Execute the CDK deploy instead of printing the command')
+    .option('-y, --yes', 'Skip the confirmation prompt (use with --run)')
+    .action(async (name: string, opts) => {
       const bp = BLUEPRINTS[name];
       if (!bp) {
         console.error(chalk.red(`\n✗ Blueprint "${name}" not found.`));
         process.exit(1);
       }
 
-      console.log(`\n${chalk.bold(`Deploying blueprint: ${chalk.cyan(name)}`)}`);
-      console.log(chalk.gray(`Service: ${opts.name} | Env: ${opts.env} | Region: ${opts.region}\n`));
+      const ctx: DeployContext = { name: opts.name, env: opts.env, region: opts.region };
 
-      const cmd = bp.deployCommand({ name: opts.name, env: opts.env, region: opts.region });
+      // ── Print path (default, no --run) ──────────────────────────────────────
+      if (!opts.run) {
+        console.log(`\n${chalk.bold(`Deploying blueprint: ${chalk.cyan(name)}`)}`);
+        console.log(chalk.gray(`Service: ${opts.name} | Env: ${opts.env} | Region: ${opts.region}\n`));
 
-      console.log(chalk.bold('Run the following from the IDP monorepo root:'));
-      console.log('\n' + chalk.yellow(`  ${cmd}`) + '\n');
+        const cmd = bp.deployCommand(ctx);
+        console.log(chalk.bold('Run the following from the IDP monorepo root:'));
+        console.log('\n' + chalk.yellow(`  ${cmd}`) + '\n');
+        console.log(chalk.gray("Tip: Configure blueprint parameters in the blueprint's cdk.json before deploying."));
+        return;
+      }
 
-      console.log(chalk.gray('Tip: Configure blueprint parameters in the blueprint\'s cdk.json before deploying.'));
+      // ── Run path (--run) ─────────────────────────────────────────────────────
+      const blueprintDir = path.join(getBlueprintsRoot(), name);
+
+      // Guard: blueprint directory must exist on disk
+      if (!(await fs.pathExists(blueprintDir))) {
+        console.error(chalk.red(`\n✗ Blueprint directory not found: ${blueprintDir}`));
+        console.error(chalk.gray('  Make sure you are running this command from the IDP monorepo root.\n'));
+        process.exit(1);
+      }
+
+      // Guard: cdk must be on PATH
+      if (!(await commandExists('cdk'))) {
+        console.error(chalk.red('\n✗ "cdk" not found on PATH. Install it with:'));
+        console.error(chalk.yellow('  npm install -g aws-cdk\n'));
+        process.exit(1);
+      }
+
+      // Confirmation (skipped with --yes)
+      if (!opts.yes) {
+        const confirmed = await confirm(
+          `\n  Deploy ${chalk.cyan(name)} to ${chalk.bold(opts.env)} (${opts.region})? ${chalk.gray('[y/N]')} `
+        );
+        if (!confirmed) {
+          console.log(chalk.gray('\n  Deployment cancelled.\n'));
+          process.exit(0);
+        }
+      }
+
+      console.log('');
+
+      // Step 1: npm install (output piped — only shown on failure)
+      const installSpinner = ora('Installing dependencies...').start();
+      const installResult = await runPiped('npm', ['install'], blueprintDir);
+
+      if (installResult.code !== 0) {
+        installSpinner.fail(chalk.red('npm install failed'));
+        if (installResult.stdout) process.stdout.write(installResult.stdout);
+        if (installResult.stderr) process.stderr.write(installResult.stderr);
+        process.exit(1);
+      }
+
+      installSpinner.succeed('Dependencies installed');
+
+      // Step 2: cdk deploy (output streamed directly to terminal)
+      console.log('\n' + chalk.bold('Deploying stack...') + '\n');
+      const deployCode = await runInherited('cdk', bp.cdkFlags(ctx), blueprintDir);
+
+      if (deployCode !== 0) {
+        console.error(chalk.red(`\n✗ CDK deploy failed (exit code ${deployCode})\n`));
+        process.exit(1);
+      }
+
+      console.log(
+        `\n${chalk.green('✓')} Blueprint ${chalk.cyan(name)} deployed successfully ` +
+        `to ${chalk.bold(opts.env)} (${opts.region})\n`
+      );
     });
 
   return blueprint;

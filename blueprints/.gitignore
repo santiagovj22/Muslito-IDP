@@ -1,0 +1,8 @@
+# Dependencies
+**/node_modules/
+
+# CDK output
+**/cdk.out/
+
+# Lock files
+**/package-lock.json
